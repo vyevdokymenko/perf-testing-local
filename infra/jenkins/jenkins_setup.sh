@@ -10,6 +10,7 @@ credentials \
 git \
 workflow-aggregator \
 role-strategy \
+pipeline-stage-view \
 job-dsl
 
 mkdir -p ~/.ssh && ssh-keyscan github.com > ~/.ssh/known_hosts
