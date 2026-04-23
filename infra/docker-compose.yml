@@ -25,6 +25,7 @@ services:
       - ./jenkins/jenkins.yaml:/var/jenkins_home/jenkins.yaml
       - ./jenkins/jenkins_setup.sh:/var/jenkins_home/jenkins_setup.sh:ro
       - ./jenkins/github_ssh_key:/tmp/github_ssh_key:ro
+      - ./jenkins/trigger_seed.groovy:/var/jenkins_home/init.groovy.d/trigger_seed.groovy:ro
     env_file:
       - ./jenkins/.env_jenkins
     entrypoint:
