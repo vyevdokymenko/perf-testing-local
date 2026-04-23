@@ -95,7 +95,7 @@ credentials:
 jobs:
   - script: >
       freeStyleJob('seed-job-pipeline-generator') {
-          description('Материнська джоба: сканує репозиторій і автоматично генерує пайплайни для кожного .jenkinsfile')
+          description('Parent job: scans the repository and automatically generates pipelines for each .jenkinsfile')
       
           scm {
               git {
@@ -109,16 +109,14 @@ jobs:
       
           steps {
               jobDsl {
-                  // Вказуємо, який скрипт запустити після клонування репозиторію
                   targets('seedjob.groovy')
       
-                  // МАГІЯ: Якщо ти видалиш файл з Git, Jenkins автоматично видалить джобу!
+                  // MAGIC: If you delete a file from Git, Jenkins will automatically delete the job!
                   removedJobAction('DELETE')
                   removedViewAction('DELETE')
               }
           }
       
-          // Запускати сканування кожні 15 хвилин (або можна налаштувати webhook)
           triggers {
               scm('H/15 * * * *')
           }
