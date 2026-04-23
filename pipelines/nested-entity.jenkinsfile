@@ -1,63 +1,49 @@
 pipeline {
-    // Виконувати на будь-якому доступному агенті (у нашому випадку це jmeter_agent)
     agent any
 
-    // Параметри, які з'являться в інтерфейсі Jenkins (Build with Parameters)
     parameters {
         string(name: 'RECORDS_COUNT', defaultValue: '3000', description: 'Кількість записів для генерації (передається в Gradle)')
     }
 
     options {
-        // Зберігати лише останні 20 запусків, щоб не забити диск контейнера
         buildDiscarder(logRotator(numToKeepStr: '20'))
-
-        // Заборонити запускати цей самий тест два рази одночасно, щоб не було конфліктів у базі
         disableConcurrentBuilds()
     }
 
     stages {
         stage('Preparation') {
             steps {
-                echo "Налаштування прав доступу..."
-                // Робимо Gradle Wrapper виконуваним скриптом
+                echo "Setting access rights..."
                 sh 'chmod +x ./gradlew'
             }
         }
 
         stage('Run Load Test Pipeline') {
             steps {
-                echo "Запуск конвеєра: Очищення -> Генерація даних -> Підготовка Keycloak -> Тест"
-
-                // Викликаємо ту саму таску, яку ми налаштували в build.gradle
-                // і прокидаємо параметр кількості записів з інтерфейсу Jenkins у Gradle
+                echo "Pipeline launch: Clean -> Data generation -> Keycloak preparation -> Test"
                 sh "./gradlew run_nested-entity -Pperf.recordsCount=${params.RECORDS_COUNT}"
             }
         }
     }
 
-    // Блок post виконується ЗАВЖДИ, навіть якщо тест впав чи його скасували
     post {
         always {
-            echo "Збір артефактів та генерація графіків..."
-
-            // 1. Публікація красивого HTML звіту прямо в інтерфейсі Jenkins
+            echo "Artifact collection and graph generation..."
             publishHTML([
-                allowMissing: true, // Не "червоніти", якщо тест впав до генерації звіту
+                allowMissing: true,
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'html-report/nested-entity',
                 reportFiles: 'index.html',
                 reportName: 'HTML Report - Nested Entity'
             ])
-
-            // 2. Збереження "сирих" JTL/CSV логів, щоб ти міг їх завантажити в архіві
             archiveArtifacts artifacts: 'build/results/nested-entity/**/*.*', allowEmptyArchive: true
         }
         success {
-            echo "✅ Тест успішно завершено! Всі метрики зібрані."
+            echo "Test completed successfully! All metrics collected."
         }
         failure {
-            echo "❌ Пайплайн впав. Перевірте консоль Jenkins або завантажте errors.xml з артефактів."
+            echo "Pipeline crashed. Check the Jenkins console or download errors.xml from artifacts."
         }
     }
 }
