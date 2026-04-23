@@ -76,6 +76,10 @@ jenkins:
               internalDir: "remoting"
               failIfWorkDirIsMissing: false
 
+security:
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: false
+
 credentials:
   system:
     domainCredentials:

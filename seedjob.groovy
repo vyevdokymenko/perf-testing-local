@@ -1,46 +1,53 @@
-// Файл: seedjob.groovy (має лежати в корені репозиторію)
+import hudson.FilePath
+
 def repoUrl = 'git@github.com:vyevdokymenko/perf-testing-local.git'
 
-// Отримуємо шлях до воркспейсу, куди Jenkins щойно зробив git clone
-def workspacePath = getProperty('WORKSPACE')
+// 1. Отримуємо об'єкт воркспейсу (FilePath), який знає, де лежать файли фізично (на агенті)
+def workspace = build.workspace
 
-// Вказуємо папку, де лежать наші пайплайни.
-// (Якщо ти залишив папку camunda-tests, зміни на 'camunda-tests/pipelines')
+if (workspace == null) {
+    throw new RuntimeException("❌ КРИТИЧНА ПОМИЛКА: Не вдалося отримати доступ до воркспейсу!")
+}
+
+// 2. Визначаємо шлях до папки з пайплайнами
 def pipelinesDirPath = 'pipelines'
-def pipelinesDir = new File(workspacePath, pipelinesDirPath)
+def pipelinesDir = workspace.child(pipelinesDirPath)
 
-// Перевіряємо, чи існує папка
-if (pipelinesDir.exists()) {
+// 3. Перевіряємо, чи існує папка на Агенті
+if (!pipelinesDir.exists()) {
+    // Викидаємо RuntimeException. Це зупинить скрипт і джоба завершиться з FAILURE
+    throw new RuntimeException("❌ ПОМИЛКА: Директорія '${pipelinesDirPath}' не знайдена у репозиторії! Перевір, чи вона закоммічена.")
+}
 
-    // Шукаємо всі файли, що закінчуються на .jenkinsfile
-    pipelinesDir.eachFileMatch(~/.*\.jenkinsfile/) { file ->
+// 4. Отримуємо список файлів .jenkinsfile
+def files = pipelinesDir.list('*.jenkinsfile')
 
-        // Витягуємо ім'я тесту (наприклад, з "nested-entity.jenkinsfile" отримаємо "nested-entity")
-        def testName = file.name.replace('.jenkinsfile', '')
+if (files.length == 0) {
+    println("⚠️ Попередження: Директорія '${pipelinesDirPath}' знайдена, але вона порожня або не містить файлів .jenkinsfile")
+}
 
-        // Генеруємо джобу типу Pipeline
-        pipelineJob("perf-test-${testName}") {
-            description("Автоматично згенерований пайплайн для навантажувального тесту: ${testName}")
+// 5. Генеруємо джоби
+files.each { file ->
+    def testName = file.name.replace('.jenkinsfile', '')
 
-            definition {
-                cpsScm {
-                    scm {
-                        git {
-                            remote {
-                                url(repoUrl)
-                                credentials('github-ssh-key')
-                            }
-                            // Якщо твоя головна гілка називається master, а не main - зміни тут!
-                            branches('main')
+    pipelineJob("perf-test-${testName}") {
+        description("Автоматично згенерований пайплайн для навантажувального тесту: ${testName}")
+
+        definition {
+            cpsScm {
+                scm {
+                    git {
+                        remote {
+                            url(repoUrl)
+                            credentials('github-ssh-key')
                         }
+                        branches('main')
                     }
-                    // Вказуємо Jenkins, де лежить файл пайплайну для цієї конкретної джоби
-                    scriptPath("${pipelinesDirPath}/${file.name}")
                 }
+                // Шлях до самого дженкінсфайла всередині репозиторію
+                scriptPath("${pipelinesDirPath}/${file.name}")
             }
         }
-        println("✅ Створено джобу: perf-test-${testName}")
     }
-} else {
-    println("❌ Директорія ${pipelinesDirPath} не знайдена у репозиторії! Перевір структуру папок.")
+    println("✅ Успішно створено/оновлено джобу: perf-test-${testName}")
 }
