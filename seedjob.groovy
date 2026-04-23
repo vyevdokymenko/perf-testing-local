@@ -16,32 +16,35 @@ if (!pipelinesDir.exists()) {
     throw new RuntimeException("ERROR: Directory '${pipelinesDirPath}' not found in repository! Workspace: ${workspace.getRemote()}")
 }
 
-def files = pipelinesDir.list('*.jenkinsfile')
-
-if (files == null || files.length == 0) {
+def testDirs = pipelinesDir.listDirectories()
+if (testDirs == null || testDirs.size() == 0) {
     println("Warning: Directory '${pipelinesDirPath}' found, but it is empty or does not contain .jenkinsfile files")
 } else {
-    files.each { file ->
-        def testName = file.name.replace('.jenkinsfile', '')
+    testDirs.each { testDir ->
+        def testName = testDir.getName()
+        def jenkinsfile = testDir.child('Jenkinsfile')
+        if (jenkinsfile.exists()) {
+            pipelineJob("perf-test-${testName}") {
+                description("Automatically generated pipeline for performance testing: ${testName}")
 
-        pipelineJob("perf-test-${testName}") {
-            description("Automatically generated pipeline for performance testing: ${testName}")
-
-            definition {
-                cpsScm {
-                    scm {
-                        git {
-                            remote {
-                                url(repoUrl)
-                                credentials('github-ssh-key')
+                definition {
+                    cpsScm {
+                        scm {
+                            git {
+                                remote {
+                                    url(repoUrl)
+                                    credentials('github-ssh-key')
+                                }
+                                branches('main')
                             }
-                            branches('main')
                         }
+                        scriptPath("${pipelinesDirPath}/${file.name}")
                     }
-                    scriptPath("${pipelinesDirPath}/${file.name}")
                 }
             }
+            println("Job successfully created/updated: perf-test-${testName}")
+        } else {
+            println("Skipped folder '${testName}': no Jenkinsfile found inside")
         }
-        println("Job successfully created/updated: perf-test-${testName}")
     }
 }
