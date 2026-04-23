@@ -22,8 +22,8 @@ if (testDirs == null || testDirs.size() == 0) {
 } else {
     testDirs.each { testDir ->
         def testName = testDir.getName()
-        def jenkinsfile = testDir.child('Jenkinsfile')
-        if (jenkinsfile.exists()) {
+        def pipelineFile = testDir.child('pipeline.groovy')
+        if (pipelineFile.exists()) {
             pipelineJob("perf-test-${testName}") {
                 description("Automatically generated pipeline for performance testing: ${testName}")
 
@@ -38,13 +38,13 @@ if (testDirs == null || testDirs.size() == 0) {
                                 branches('main')
                             }
                         }
-                        scriptPath("${pipelinesDirPath}/${file.name}")
+                        scriptPath("${pipelinesDirPath}/${testName}/pipeline.groovy")
                     }
                 }
             }
             println("Job successfully created/updated: perf-test-${testName}")
         } else {
-            println("Skipped folder '${testName}': no Jenkinsfile found inside")
+            println("Skipped folder '${testName}': file 'pipeline.groovy' not found inside")
         }
     }
 }
