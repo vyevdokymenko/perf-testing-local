@@ -1,0 +1,14 @@
+tasks.register('groovyGenerateMockUsers', JavaExec) {
+    description = 'Генерує mock-users для тесту Nested Entity'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'generators.mockusers.MockUsersGenerator'
+}
+
+tasks.register('groovyGenerateExecutionPlan', JavaExec) {
+    dependsOn 'groovyGenerateMockUsers'
+
+    group 'prepopulation'
+    description = 'Генерує execution-plan.csv для тесту Nested Entity'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'generators.datafactory.NestedEntityDataGenerator'
+}

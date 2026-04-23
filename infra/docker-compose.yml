@@ -1,0 +1,77 @@
+name: perf-testing
+
+services:
+
+  # --- Traefik (rootless friendly) ---
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    volumes:
+      - ./traefik/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - ./traefik/dynamic.yaml:/etc/traefik/dynamic.yaml:ro
+      - ./traefik/acme.json:/etc/traefik/acme.json
+    command:
+      - "--configFile=/etc/traefik/traefik.yaml"
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  # --- Jenkins ---
+  jenkins:
+    image: jenkins/jenkins:2.506-jdk21
+    container_name: jenkins
+    volumes:
+      - ./jenkins/jenkins_home:/var/jenkins_home
+      - ./jenkins/jenkins.yaml:/var/jenkins_home/jenkins.yaml
+      - ./jenkins/jenkins_setup.sh:/var/jenkins_home/jenkins_setup.sh:ro
+    env_file:
+      - ./jenkins/.env_jenkins
+    entrypoint:
+      [
+        "/bin/bash",
+        "-c",
+        "if [ ! -f /var/jenkins_home/.initialized ]; then /var/jenkins_home/jenkins_setup.sh && touch /var/jenkins_home/.initialized; fi && exec /usr/bin/tini -- /usr/local/bin/jenkins.sh"
+      ]
+    restart: unless-stopped
+    userns_mode: "keep-id"
+
+  # --- JMeter ---
+  jmeter_agent:
+    image: jmeter_agent_5.6.3:local
+    container_name: jmeter_agent
+    volumes:
+      - ./jmeter/jmeter_workspace:/home/jmeter_agent/jmeter_workspace
+      - ./jmeter/jmeter_agent.sh:/home/jmeter_agent/jmeter_agent.sh:ro
+    env_file:
+      - ./jmeter/.env_jmeter_agent
+    entrypoint: ["/bin/bash", "-c", "/home/jmeter_agent/jmeter_agent.sh"]
+    restart: unless-stopped
+    userns_mode: "keep-id"
+    depends_on:
+      - jenkins
+
+  # --- InfluxDB ---
+  influxdb:
+    image: influxdb:1.11
+    container_name: influxdb
+    volumes:
+      - ./influxdb/influxdb_data:/var/lib/influxdb
+    env_file:
+      - ./influxdb/.env_influxdb
+    restart: unless-stopped
+    userns_mode: "keep-id"
+
+  # --- Grafana ---
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: grafana
+    volumes:
+      - ./grafana/grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    env_file:
+      - ./grafana/.env_grafana
+    restart: unless-stopped
+    userns_mode: "keep-id"
+    depends_on:
+      - influxdb

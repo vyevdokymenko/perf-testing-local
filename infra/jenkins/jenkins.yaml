@@ -1,0 +1,126 @@
+jenkins:
+  systemMessage: "Jenkins configured as code"
+  numExecutors: 0
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_USERNAME}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+          name: "Jenkins Admin"
+        - id: "${JENKINS_AGENT_USERNAME}"
+          password: "${JENKINS_AGENT_PASSWORD}"
+          name: "JMeter Agent"
+        - id: "${JENKINS_TESTER_USERNAME}"
+          password: "${JENKINS_TESTER_PASSWORD}"
+          name: "User Tester"
+  
+  projectNamingStrategy:
+    roleBased:
+      forceExistingJobs: true
+
+  authorizationStrategy:
+    roleBased:
+      roles:
+        global:
+          - name: "admin"
+            description: "Full administrator"
+            permissions:
+              - "Overall/Administer"
+            entries:
+              - user: "admin"
+          - name: "agent"
+            description: "Limited agent access"
+            permissions:
+              - "Overall/Read"
+              - "Agent/Connect"
+              - "Agent/Configure"
+              - "Overall/RunScripts"
+            entries:
+              - user: "agent"
+          - name: "authenticated"
+            description: "All logged-in users read-only"
+            permissions:
+              - "Overall/Read"
+            entries:
+              - group: "authenticated"
+        items:
+          - name: "tester"
+            description: "Can only manage own jobs"
+            pattern: "aikom-.*"
+            permissions:
+              - "Job/Build"
+              - "Job/Cancel"
+              - "Job/Configure"
+              - "Job/Create"
+              - "Job/Delete"
+              - "Job/Discover"
+              - "Job/Read"
+            entries:
+              - user: "tester"
+  
+  nodes:
+    - permanent:
+        name: "${JENKINS_AGENT_NAME}"
+        remoteFS: "${JENKINS_AGENT_WORKSPACE}" 
+        numExecutors: 5
+        labelString: "${JENKINS_AGENT_LABEL}"
+        mode: "NORMAL"
+        launcher:
+          inbound:
+            tunnel: ""
+            webSocket: true
+            workDirSettings:
+              disabled: false
+              internalDir: "remoting"
+              failIfWorkDirIsMissing: false
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - basicSSHUserPrivateKey:
+              id: "github-ssh-key"
+              description: "SSH key for GitHub access"
+              username: "git"
+              privateKeySource:
+                directEntry:
+                  privateKey: "${GITHUB_SSH_PRIVATE_KEY}"
+
+jobs:
+  - script: >
+      freeStyleJob('seed-job-pipeline-generator') {
+          description('Материнська джоба: сканує репозиторій і автоматично генерує пайплайни для кожного .jenkinsfile')
+      
+          scm {
+              git {
+                  remote {
+                      url('git@github.com:diia-engine/perf-testing.git')
+                      credentials('github-ssh-key')
+                  }
+                  branches('main')
+              }
+          }
+      
+          steps {
+              jobDsl {
+                  // Вказуємо, який скрипт запустити після клонування репозиторію
+                  targets('seedjob.groovy')
+      
+                  // МАГІЯ: Якщо ти видалиш файл з Git, Jenkins автоматично видалить джобу!
+                  removedJobAction('DELETE')
+                  removedViewAction('DELETE')
+              }
+          }
+      
+          // Запускати сканування кожні 15 хвилин (або можна налаштувати webhook)
+          triggers {
+              scm('H/15 * * * *')
+          }
+      }
+
+unclassified:  
+  location:
+    url: "${JENKINS_EXTERNAL_URL}"
+    adminAddress: "${JENKINS_ADMIN_MAIL}"

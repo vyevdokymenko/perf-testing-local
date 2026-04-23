@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sign-widget-mock
+  labels:
+    app: sign-widget-mock
+    app.kubernetes.io/instance: sign-widget-mock
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: sign-widget-mock
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sign-widget-mock
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  template:
+    metadata:
+      labels:
+        app: sign-widget-mock
+        app.kubernetes.io/instance: sign-widget-mock
+        app.kubernetes.io/name: sign-widget-mock
+      annotations:
+        sidecar.istio.io/inject: 'false'
+    spec:
+      serviceAccountName: sign-widget-mock
+      volumes:
+        - name: sign-widget-mock-nginx-config
+          configMap:
+            name: sign-widget-mock-nginx-config
+        - name: compressed-archive
+          configMap:
+            name: sign-widget-mock-users-archive
+        - name: generated-data
+          emptyDir: {}
+
+      initContainers:
+        - name: config-generator
+          image: alpine:latest
+          volumeMounts:
+            - name: compressed-archive
+              mountPath: /tmp/archive
+            - name: generated-data
+              mountPath: /mnt/out
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+  
+              echo "1. Unpacking CSV from archive..."
+              tar -xzf /tmp/archive/mock-users.tar.gz -C /tmp
+  
+              echo "2. Running AWK magic..."
+              
+              awk -F, '
+              BEGIN {
+                js = "/mnt/out/users.js.new"
+                yml = "/mnt/out/isolation-predefined-users.yml"
+                print "var MOCK_USERS = {" > js
+                print "predefined-users:" > yml
+                first = 1
+              }
+              NR > 1 {
+                if (NF < 4) {
+                  print "ERROR: not enough columns in line " NR > "/dev/stderr"
+                  next
+                }
+                
+                u = $1
+                full = $2
+                ed = $3
+                dr = $4
+              
+                gsub(/^["'\''"]+|["'\''"]+$/, "", u)
+                gsub(/^["'\''"]+|["'\''"]+$/, "", full)
+                gsub(/^["'\''"]+|["'\''"]+$/, "", ed)
+                gsub(/^["'\''"]+|["'\''"]+$/, "", dr)
+                
+                # JS entry
+                if (!first) { print "," > js }
+                first = 0
+                printf "  \"[%s.dat]\": {\n    \"drfo\": \"%s\",\n    \"edrpou\": \"%s\",\n    \"fullName\": \"%s\"\n  }", u, dr, ed, full > js
+              
+                # YAML entry
+                printf "  \x27[%s.dat]\x27:\n    drfo: \"%s\"\n    edrpou: \"%s\"\n    fullName: \"%s\"\n", u, dr, ed, full > yml
+              }
+              END {
+                print "\n};" > js
+              }' /tmp/mock-users.csv
+                
+              mv /mnt/out/users.js.new /mnt/out/users.js
+                
+              echo "3. Done! Reality check:"
+              ls -lh /mnt/out/
+
+      containers:
+        - name: sign-widget-mock
+          image: docker-registry.control-plane-nexus.svc:5004/control-plane/sign-widget-mock-1-9-8:1.9.8.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: ui
+              containerPort: 8080
+              protocol: TCP
+          resources: {}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 15
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 15
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          volumeMounts:
+            - name: sign-widget-mock-nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: generated-data
+              mountPath: /usr/share/nginx/html/users.js
+              subPath: users.js
+            - name: generated-data
+              mountPath: /usr/share/nginx/html/isolation-predefined-users.yml
+              subPath: isolation-predefined-users.yml

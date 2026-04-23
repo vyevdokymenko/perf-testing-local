@@ -1,0 +1,58 @@
+http:
+  routers:
+    grafana:
+      rule: "Host(`grafana.localhost`)"
+      service: grafana
+      entryPoints:
+        - web
+      #  - websecure
+      # tls:
+      #   certResolver: letsencrypt
+      #   domains:
+      #     - main: "grafana-perf-test.dev.registry.eua.gov.ua"
+      #middlewares:
+      #  - auth 
+    
+    jenkins:
+      rule: "Host(`jenkins.localhost`)"
+      service: jenkins
+      entryPoints:
+        - web
+      #  - websecure
+      #tls:
+      #  certResolver: letsencrypt
+      #  domains:
+      #    - main: "jenkins-perf-test.dev.registry.eua.gov.ua"
+    
+    # kibana:
+    #   rule: "Host(`kibana-perf-test.dev.registry.eua.gov.ua`)"
+    #   service: kibana
+    #   entryPoints:
+    #     - websecure
+    #   tls:
+    #     certResolver: letsencrypt
+    #     domains:
+    #       - main: "kibana-perf-test.dev.registry.eua.gov.ua"
+      #middlewares:
+      #  - auth 
+    
+  # middlewares:
+  #  auth:
+  #    basicAuth:
+  #      users:
+  #        - "perf:$apr1$0nYKWE/Q$uKS8UjmPEjW90A4J17m0/1"
+  services:
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3000"
+
+    jenkins:
+      loadBalancer:
+        servers:
+          - url: "http://jenkins:8080"
+    
+    # kibana:
+    #   loadBalancer:
+    #     servers:
+    #       - url: "http://kibana:5601"

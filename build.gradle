@@ -1,0 +1,107 @@
+plugins {
+    id 'groovy'
+    id 'java'
+}
+
+group = 'ua.gov.diia.engine.perf'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.apache.groovy:groovy:4.0.15'
+    implementation 'org.apache.groovy:groovy-json:4.0.15'
+    implementation 'net.datafaker:datafaker:2.5.4'
+    implementation 'org.apache.commons:commons-compress:1.28.0'
+}
+
+tasks.withType(JavaExec).configureEach {
+    systemProperties project.properties
+}
+
+apply from: 'gradle/scenarios/nested-entity.gradle'
+
+tasks.register('jmxCleanup', Delete) {
+    description = 'Remove old logs and HTML reports before new start'
+    delete 'html-report', 'build/results'
+}
+
+def performanceScenarios = [
+        'NestedEntity': [
+                jmxFile : 'feature-nested-entity-test-process.jmx',
+                preFlightJmx: [
+                        'delete-keycloak-users.jmx',
+                        'create-keycloak-users.jmx'
+                ]
+        ]
+        /*
+        , 'iban-update': [
+            jmxFile: 'reference-iban-update-process.jmx',
+            prepTask: 'groovyGenerateIbanData'
+        ]
+        */
+]
+
+performanceScenarios.each { scenarioName, config ->
+    def serviceTaskNames = []
+
+    config.preFlightJmx?.each {jmxName ->
+        def taskName = "run_${jmxName.toString().replace('.jmx', '')}".toString()
+        serviceTaskNames << taskName
+
+        if (!tasks.names.contains(taskName)) {
+            tasks.register(taskName, Exec) {
+                group = 'keycloak'
+                executable = project.properties.get('perf.jmeterExecFile')
+                args = [
+                        '-n',
+                        '-t', project.file("src/test/jmeter/${jmxName}").absolutePath,
+                        "-JtestDataDir=${project.file(project.properties.get('perf.testDataDir')).absolutePath}"
+                ]
+                doFirst { println "Service task started: ${jmxName}" }
+            }
+        }
+    }
+
+    for (int i = 1; i < serviceTaskNames.size(); i++) {
+        def prevTask = serviceTaskNames[i - 1]
+        def currentTask = serviceTaskNames[i] as String
+
+        tasks.named(currentTask).configure {
+            mustRunAfter prevTask
+        }
+    }
+
+    def preFlightTaskName = "jmxPreFlight_${scenarioName}"
+    tasks.register(preFlightTaskName) {
+        description = "Внутрішня таска для послідовного запуску службових JMX"
+        dependsOn serviceTaskNames
+    }
+
+    tasks.register("run_${scenarioName}", Exec) {
+        group = 'performance test'
+        description = "Повний запуск конвеєра: Cleanup -> DataGen -> Keycloak -> Test"
+
+        // Залежності: Клінінг -> Генерація Даних -> Keycloak-скрипти
+        dependsOn 'jmxCleanup', preFlightTaskName
+
+        def outputDir = project.file("build/results/${scenarioName}")
+        def htmlDir = project.file("html-report/${scenarioName}")
+
+        doFirst {
+            mkdir outputDir.absolutePath
+            mkdir project.file("html-report").absolutePath
+        }
+
+        executable = project.properties.get('perf.jmeterExecFile')
+        args = [
+                '-n', '-t', project.file("src/test/jmeter/${config.jmxFile}").absolutePath,
+                '-l', new File(outputDir, "results.csv").absolutePath,
+                '-e', '-o', htmlDir.absolutePath,
+                "-JtestDataDir=${project.file(project.properties.get('perf.testDataDir')).absolutePath}",
+                "-JerrorLogPath=${new File(outputDir, 'errors.xml').absolutePath}"
+        ]
+    }
+}

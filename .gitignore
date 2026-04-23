@@ -19,3 +19,10 @@ gradle-app.setting
 .project
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+
+infra/jenkins/jenkins_home/
+infra/influxdb/influxdb_data/
+infra/grafana/grafana_data/
+build/
+html-report/
+*.tar.gz
