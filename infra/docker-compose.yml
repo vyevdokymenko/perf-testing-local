@@ -24,6 +24,7 @@ services:
       - ./jenkins/jenkins_home:/var/jenkins_home
       - ./jenkins/jenkins.yaml:/var/jenkins_home/jenkins.yaml
       - ./jenkins/jenkins_setup.sh:/var/jenkins_home/jenkins_setup.sh:ro
+      - ./jenkins/github_ssh_key:/tmp/github_ssh_key:ro
     env_file:
       - ./jenkins/.env_jenkins
     entrypoint:

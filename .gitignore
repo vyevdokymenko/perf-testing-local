@@ -41,3 +41,4 @@ html-report/
 
 *.tar.gz
 *.log
+infra/jenkins/github_ssh_key

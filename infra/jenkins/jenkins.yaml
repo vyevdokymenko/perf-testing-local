@@ -86,7 +86,7 @@ credentials:
               username: "git"
               privateKeySource:
                 directEntry:
-                  privateKey: "${GITHUB_SSH_PRIVATE_KEY}"
+                  privateKey: "${readFile:/tmp/github_ssh_key}"
 
 jobs:
   - script: >
@@ -96,7 +96,7 @@ jobs:
           scm {
               git {
                   remote {
-                      url('git@github.com:diia-engine/perf-testing.git')
+                      url('git@github.com:vyevdokymenko/perf-testing-local.git')
                       credentials('github-ssh-key')
                   }
                   branches('main')
